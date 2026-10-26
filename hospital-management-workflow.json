@@ -1,0 +1,224 @@
+{
+  "name": "Hospital Patient Flow Management (demo, no login needed)",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "h1000000-0000-4000-8000-000000000001",
+      "name": "Click to Run",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [0, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [\n  { json: { id: 'P001', name: 'Ravi Kumar', age: 58, gender: 'M', complaint: 'severe chest pain and sweating', temp: 37.2, pulse: 118, systolic: 165, spo2: 93, insured: true } },\n  { json: { id: 'P002', name: 'Anita Sharma', age: 34, gender: 'F', complaint: 'fever and cough for 3 days', temp: 38.9, pulse: 112, systolic: 118, spo2: 92, insured: true } },\n  { json: { id: 'P003', name: 'Aarav Singh', age: 7, gender: 'M', complaint: 'high fever and sore throat', temp: 39.1, pulse: 110, systolic: 100, spo2: 98, insured: false } },\n  { json: { id: 'P004', name: 'Mohan Lal', age: 71, gender: 'M', complaint: 'difficulty breathing', temp: 37.5, pulse: 105, systolic: 150, spo2: 86, insured: true } },\n  { json: { id: 'P005', name: 'Sunita Devi', age: 45, gender: 'F', complaint: 'knee pain after fall', temp: 36.8, pulse: 82, systolic: 125, spo2: 98, insured: true } },\n  { json: { id: 'P006', name: 'Karan Mehta', age: 29, gender: 'M', complaint: 'skin rash and itching', temp: 36.7, pulse: 76, systolic: 118, spo2: 99, insured: false } },\n  { json: { id: 'P007', name: 'Priya Nair', age: 52, gender: 'F', complaint: 'headache and dizziness', temp: 37.0, pulse: 88, systolic: 185, spo2: 97, insured: true } },\n  { json: { id: 'P008', name: 'Imran Khan', age: 40, gender: 'M', complaint: 'stomach pain and vomiting', temp: 38.4, pulse: 104, systolic: 122, spo2: 98, insured: false } },\n  { json: { id: 'P001', name: 'Ravi Kumar', age: 58, gender: 'M', complaint: 'duplicate registration', temp: 37.2, pulse: 118, systolic: 165, spo2: 93, insured: true } },\n  { json: { id: 'P010', name: 'Test Patient', age: 30, gender: 'F', complaint: '', insured: false } },\n  { json: { id: 'P011', name: 'Sita Verma', age: 27, gender: 'F', complaint: 'ear pain', temp: 98.6, pulse: 80, systolic: 120, spo2: 99, insured: true } }\n];"
+      },
+      "id": "h1000000-0000-4000-8000-000000000002",
+      "name": "Sample Patients",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [200, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const seen = {};\nconst out = [];\nconst check = (v, min, max, label, issues) => {\n  if (typeof v !== 'number' || isNaN(v) || v < min || v > max) {\n    issues.push(label + ' missing or invalid');\n    return null;\n  }\n  return v;\n};\n$input.all().forEach((item) => {\n  const p = item.json;\n  const id = String(p.id || '').trim();\n  if (!id || seen[id]) {\n    return;\n  }\n  seen[id] = true;\n  const issues = [];\n  let name = String(p.name || '').trim();\n  if (!name) {\n    name = 'Unknown';\n    issues.push('Name missing');\n  }\n  let complaint = String(p.complaint || '').trim();\n  if (!complaint) {\n    complaint = 'not provided';\n    issues.push('Complaint missing');\n  }\n  const age = check(p.age, 0, 120, 'Age', issues);\n  const temp = check(p.temp, 30, 45, 'Temperature', issues);\n  const pulse = check(p.pulse, 20, 250, 'Pulse', issues);\n  const systolic = check(p.systolic, 50, 260, 'Blood pressure', issues);\n  const spo2 = check(p.spo2, 50, 100, 'Oxygen level', issues);\n  out.push({ json: { id: id, name: name, age: age, gender: p.gender || 'NA', complaint: complaint, temp: temp, pulse: pulse, systolic: systolic, spo2: spo2, insured: p.insured === true, dataIssues: issues } });\n});\nreturn out;"
+      },
+      "id": "h1000000-0000-4000-8000-000000000003",
+      "name": "Validate Records",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [400, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const has = (text, words) => words.some((w) => text.indexOf(w) !== -1);\nreturn $input.all().map((item) => {\n  const p = item.json;\n  const text = String(p.complaint).toLowerCase();\n  let score = 0;\n  const reasons = [];\n  if (p.spo2 !== null && p.spo2 < 90) {\n    score += 4;\n    reasons.push('Low oxygen');\n  } else if (p.spo2 !== null && p.spo2 < 94) {\n    score += 2;\n    reasons.push('Slightly low oxygen');\n  }\n  if (p.temp !== null && p.temp >= 39.5) {\n    score += 2;\n    reasons.push('Very high temperature');\n  } else if (p.temp !== null && p.temp >= 38) {\n    score += 1;\n    reasons.push('Fever');\n  }\n  if (p.pulse !== null && (p.pulse > 120 || p.pulse < 50)) {\n    score += 2;\n    reasons.push('Abnormal pulse');\n  } else if (p.pulse !== null && p.pulse > 100) {\n    score += 1;\n    reasons.push('Fast pulse');\n  }\n  if (p.systolic !== null && (p.systolic >= 180 || p.systolic < 90)) {\n    score += 3;\n    reasons.push('Abnormal blood pressure');\n  } else if (p.systolic !== null && p.systolic >= 140) {\n    score += 1;\n    reasons.push('High blood pressure');\n  }\n  if (has(text, ['chest pain', 'breathing', 'bleeding', 'unconscious', 'stroke'])) {\n    score += 4;\n    reasons.push('Red-flag complaint');\n  } else if (has(text, ['vomit'])) {\n    score += 1;\n    reasons.push('Vomiting');\n  }\n  if (p.age !== null && (p.age >= 65 || p.age <= 5)) {\n    score += 1;\n    reasons.push('Age risk group');\n  }\n  let level = 4;\n  let label = 'Routine';\n  if (score >= 6) {\n    level = 1;\n    label = 'Critical';\n  } else if (score >= 4) {\n    level = 2;\n    label = 'Urgent';\n  } else if (score >= 2) {\n    level = 3;\n    label = 'Semi-urgent';\n  }\n  return { json: Object.assign({}, p, { triageScore: score, triageLevel: level, triageLabel: label, triageReasons: reasons }) };\n});"
+      },
+      "id": "h1000000-0000-4000-8000-000000000004",
+      "name": "Triage Score",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [600, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const has = (text, words) => words.some((w) => text.indexOf(w) !== -1);\nreturn $input.all().map((item) => {\n  const p = item.json;\n  const text = String(p.complaint).toLowerCase();\n  let department = 'General Medicine';\n  if (p.triageLevel === 1) {\n    department = 'Emergency';\n  } else if (has(text, ['chest', 'heart', 'palpitation'])) {\n    department = 'Cardiology';\n  } else if (p.age !== null && p.age < 14) {\n    department = 'Pediatrics';\n  } else if (has(text, ['knee', 'fracture', 'bone', 'joint', 'fall'])) {\n    department = 'Orthopedics';\n  } else if (has(text, ['skin', 'rash', 'itch'])) {\n    department = 'Dermatology';\n  } else if (has(text, ['headache', 'dizz', 'seizure'])) {\n    department = 'Neurology';\n  } else if (has(text, ['stomach', 'vomit', 'abdom'])) {\n    department = 'Gastroenterology';\n  }\n  return { json: Object.assign({}, p, { department: department }) };\n});"
+      },
+      "id": "h1000000-0000-4000-8000-000000000005",
+      "name": "Assign Department",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [800, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const roster = {\n  'Emergency': { doctors: ['Dr. Mehta', 'Dr. Iyer'], rooms: ['ER-1', 'ER-2', 'ER-3'] },\n  'Cardiology': { doctors: ['Dr. Rao', 'Dr. Sen'], rooms: ['C-101', 'C-102'] },\n  'Pediatrics': { doctors: ['Dr. Gupta'], rooms: ['P-201', 'P-202'] },\n  'Orthopedics': { doctors: ['Dr. Khanna'], rooms: ['O-301'] },\n  'Dermatology': { doctors: ['Dr. Joshi'], rooms: ['D-401'] },\n  'Neurology': { doctors: ['Dr. Menon'], rooms: ['N-501'] },\n  'Gastroenterology': { doctors: ['Dr. Das'], rooms: ['G-601'] },\n  'General Medicine': { doctors: ['Dr. Nair', 'Dr. Bose'], rooms: ['GM-1', 'GM-2', 'GM-3'] }\n};\nconst counts = {};\nreturn $input.all().map((item) => {\n  const p = item.json;\n  const r = roster[p.department] || roster['General Medicine'];\n  const n = counts[p.department] || 0;\n  counts[p.department] = n + 1;\n  return { json: Object.assign({}, p, { doctor: r.doctors[n % r.doctors.length], room: r.rooms[n % r.rooms.length] }) };\n});"
+      },
+      "id": "h1000000-0000-4000-8000-000000000006",
+      "name": "Assign Doctor and Room",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1000, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const fees = {\n  'Emergency': 3000,\n  'Cardiology': 1500,\n  'Pediatrics': 800,\n  'Orthopedics': 1200,\n  'Dermatology': 700,\n  'Neurology': 1400,\n  'Gastroenterology': 1000,\n  'General Medicine': 500\n};\nreturn $input.all().map((item) => {\n  const p = item.json;\n  const fee = fees[p.department] || 500;\n  let surcharge = 0;\n  if (p.triageLevel === 1) {\n    surcharge = 2000;\n  } else if (p.triageLevel === 2) {\n    surcharge = 500;\n  }\n  const totalBill = fee + surcharge;\n  const insuranceCovered = p.insured ? Math.round(totalBill * 0.7) : 0;\n  const patientPays = totalBill - insuranceCovered;\n  return { json: Object.assign({}, p, { consultationFee: fee, surcharge: surcharge, totalBill: totalBill, insuranceCovered: insuranceCovered, patientPays: patientPays }) };\n});"
+      },
+      "id": "h1000000-0000-4000-8000-000000000007",
+      "name": "Billing Estimate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1200, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const labs = {\n  'Emergency': ['ECG', 'Blood panel', 'Oxygen monitoring'],\n  'Cardiology': ['ECG', 'Lipid profile'],\n  'Pediatrics': ['Throat swab', 'CBC'],\n  'Orthopedics': ['X-ray'],\n  'Dermatology': ['Skin examination'],\n  'Neurology': ['Blood pressure check', 'CT scan if the doctor advises'],\n  'Gastroenterology': ['Stool test', 'Ultrasound if the doctor advises'],\n  'General Medicine': ['CBC', 'Chest X-ray if the doctor advises']\n};\nreturn $input.all().map((item) => {\n  const p = item.json;\n  return { json: Object.assign({}, p, { labOrders: labs[p.department] || ['CBC'] }) };\n});"
+      },
+      "id": "h1000000-0000-4000-8000-000000000008",
+      "name": "Lab Orders",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1400, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nitems.sort((a, b) => (a.json.triageLevel - b.json.triageLevel) || (b.json.triageScore - a.json.triageScore) || (a.json.id < b.json.id ? -1 : 1));\nreturn items;"
+      },
+      "id": "h1000000-0000-4000-8000-000000000009",
+      "name": "Sort by Triage",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1600, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "i1000000-0000-4000-8000-000000000001",
+              "leftValue": "={{ $json.triageLevel }}",
+              "rightValue": 1,
+              "operator": { "type": "number", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "h1000000-0000-4000-8000-000000000010",
+      "name": "Is Critical?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1820, 180]
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().map((item) => {\n  const p = item.json;\n  return { json: { id: p.id, name: p.name, alert: '🚨 CODE RED: ' + p.name + ' (' + p.id + ') - ' + p.complaint, action: 'Move immediately to ' + p.room + ' with ' + p.doctor, reasons: p.triageReasons.join(', ') } };\n});"
+      },
+      "id": "h1000000-0000-4000-8000-000000000011",
+      "name": "Emergency Alert",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2040, 100]
+    },
+    {
+      "parameters": {
+        "jsCode": "const pad = (n) => (n < 10 ? '0' + n : String(n));\nconst slots = {};\nreturn $input.all().map((item) => {\n  const p = item.json;\n  const n = slots[p.doctor] || 0;\n  slots[p.doctor] = n + 1;\n  const mins = 9 * 60 + n * 15;\n  const time = pad(Math.floor(mins / 60)) + ':' + pad(mins % 60);\n  return { json: { id: p.id, name: p.name, doctor: p.doctor, room: p.room, appointment: time, message: 'Appointment for ' + p.name + ' with ' + p.doctor + ' at ' + time + ' in room ' + p.room } };\n});"
+      },
+      "id": "h1000000-0000-4000-8000-000000000012",
+      "name": "Schedule Appointment",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2040, 260]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all().map((x) => x.json);\nconst count = (key) => {\n  const r = {};\n  items.forEach((i) => {\n    r[i[key]] = (r[i[key]] || 0) + 1;\n  });\n  return r;\n};\nconst fmt = (obj) => Object.keys(obj).map((k) => k + ': ' + obj[k]).join(', ');\nconst sum = (key) => items.reduce((t, i) => t + i[key], 0);\nconst byTriage = count('triageLabel');\nconst byDepartment = count('department');\nconst byDoctor = count('doctor');\nconst totalBilled = sum('totalBill');\nconst insuranceCovered = sum('insuranceCovered');\nconst patientPays = sum('patientPays');\nconst withIssues = items.filter((i) => i.dataIssues.length > 0).length;\nconst critical = items.filter((i) => i.triageLevel === 1).map((i) => '- ' + i.id + ' ' + i.name + ' -> ' + i.room + ' (' + i.doctor + ')');\nconst summary = [\n  '🏥 Hospital Daily Summary',\n  'Patients today: ' + items.length,\n  'By triage: ' + fmt(byTriage),\n  'By department: ' + fmt(byDepartment),\n  'Doctor load: ' + fmt(byDoctor),\n  'Total billed: Rs ' + totalBilled,\n  'Insurance covers: Rs ' + insuranceCovered,\n  'Patients pay: Rs ' + patientPays,\n  'Records with data issues: ' + withIssues,\n  '',\n  '🚨 Critical patients:',\n  critical.length ? critical.join('\\n') : '- none'\n].join('\\n');\nreturn [{ json: { patients: items.length, byTriage: byTriage, byDepartment: byDepartment, byDoctor: byDoctor, totalBilled: totalBilled, insuranceCovered: insuranceCovered, patientPays: patientPays, withIssues: withIssues, summary: summary } }];"
+      },
+      "id": "h1000000-0000-4000-8000-000000000013",
+      "name": "Hospital Dashboard",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1820, 440]
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $input.first().json;\nconst items = $('Sort by Triage').all().map((x) => x.json);\nconst rows = items.map((i) => '| ' + i.id + ' | ' + i.name + ' | ' + (i.age === null ? '-' : i.age) + ' | ' + i.triageLabel + ' | ' + i.department + ' | ' + i.doctor + ' | ' + i.room + ' | Rs ' + i.totalBill + ' |');\nconst notes = items.filter((i) => i.dataIssues.length > 0).map((i) => '- ' + i.id + ' ' + i.name + ': ' + i.dataIssues.join('; '));\nconst report = [\n  '# Hospital Patient Flow Report (demo data)',\n  '',\n  d.summary,\n  '',\n  '## Patients (most urgent first)',\n  '| ID | Name | Age | Triage | Department | Doctor | Room | Bill |',\n  '|---|---|---|---|---|---|---|---|'\n].concat(rows).concat(['', '## Data issues to fix', notes.length ? notes.join('\\n') : '- none', '', 'Note: this is a demo with sample data. It is not medical advice.']).join('\\n');\nreturn [{ json: { patients: d.patients, report: report } }];"
+      },
+      "id": "h1000000-0000-4000-8000-000000000014",
+      "name": "Final Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2040, 440]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "j1000000-0000-4000-8000-000000000001",
+              "name": "status",
+              "value": "Workflow completed successfully",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "h1000000-0000-4000-8000-000000000015",
+      "name": "Final Output",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [2260, 440]
+    }
+  ],
+  "connections": {
+    "Click to Run": {
+      "main": [[{ "node": "Sample Patients", "type": "main", "index": 0 }]]
+    },
+    "Sample Patients": {
+      "main": [[{ "node": "Validate Records", "type": "main", "index": 0 }]]
+    },
+    "Validate Records": {
+      "main": [[{ "node": "Triage Score", "type": "main", "index": 0 }]]
+    },
+    "Triage Score": {
+      "main": [[{ "node": "Assign Department", "type": "main", "index": 0 }]]
+    },
+    "Assign Department": {
+      "main": [[{ "node": "Assign Doctor and Room", "type": "main", "index": 0 }]]
+    },
+    "Assign Doctor and Room": {
+      "main": [[{ "node": "Billing Estimate", "type": "main", "index": 0 }]]
+    },
+    "Billing Estimate": {
+      "main": [[{ "node": "Lab Orders", "type": "main", "index": 0 }]]
+    },
+    "Lab Orders": {
+      "main": [[{ "node": "Sort by Triage", "type": "main", "index": 0 }]]
+    },
+    "Sort by Triage": {
+      "main": [
+        [
+          { "node": "Is Critical?", "type": "main", "index": 0 },
+          { "node": "Hospital Dashboard", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Is Critical?": {
+      "main": [
+        [{ "node": "Emergency Alert", "type": "main", "index": 0 }],
+        [{ "node": "Schedule Appointment", "type": "main", "index": 0 }]
+      ]
+    },
+    "Hospital Dashboard": {
+      "main": [[{ "node": "Final Report", "type": "main", "index": 0 }]]
+    },
+    "Final Report": {
+      "main": [[{ "node": "Final Output", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": { "executionOrder": "v1" },
+  "pinData": {}
+}
